@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OCR CS Revision Quiz</title>
+<title>GCSE Revision Quiz</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -35,6 +35,18 @@
   .btn-primary:hover:not(:disabled) { opacity: 0.9; }
   .btn-secondary { background: transparent; color: var(--text-muted); border: 1px solid var(--gray-border); margin-top: 8px; }
   .btn-secondary:hover { background: var(--gray-bg); }
+
+  /* Subject screen */
+  #subject-screen { display: none; }
+  .subject-header { text-align: center; margin-bottom: 1.5rem; }
+  .subject-header h1 { font-size: 20px; font-weight: 600; margin-bottom: 0.25rem; }
+  .subject-header p { font-size: 14px; color: var(--text-muted); }
+  .subject-grid { display: flex; flex-direction: column; gap: 10px; }
+  .subject-card-btn { background: var(--gray-surface); border: 1px solid var(--gray-border); border-radius: var(--radius-lg); padding: 1.25rem 1.5rem; cursor: pointer; text-align: left; transition: all 0.15s; display: flex; align-items: center; gap: 1rem; width: 100%; }
+  .subject-card-btn:hover { border-color: var(--green); background: var(--green-light); }
+  .subject-icon { font-size: 28px; line-height: 1; }
+  .subject-name { font-size: 16px; font-weight: 600; color: var(--text); }
+  .subject-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 
   /* Quiz shell */
   #quiz-screen { display: none; }
@@ -100,7 +112,7 @@
   <div id="lock-screen">
     <div class="lock-card">
       <div class="lock-icon">📚</div>
-      <h1>OCR CS Revision Quiz</h1>
+      <h1>GCSE Revision Quiz</h1>
       <p>Enter the password to start revising</p>
       <input class="pw-input" type="password" id="pw-input" placeholder="Password" onkeydown="if(event.key==='Enter')checkPassword()">
       <div class="pw-error" id="pw-error">Incorrect password — try again</div>
@@ -108,28 +120,31 @@
     </div>
   </div>
 
+  <!-- Subject screen -->
+  <div id="subject-screen">
+    <div class="subject-header">
+      <h1>Choose a subject</h1>
+      <p>Select a subject to start your revision session</p>
+    </div>
+    <div class="subject-grid" id="subject-grid"></div>
+  </div>
+
   <!-- Quiz screen -->
   <div id="quiz-screen">
-
     <div class="top-bar">
-      <span class="app-title">OCR GCSE CS Quiz</span>
+      <span class="app-title" id="app-title">GCSE Quiz</span>
       <span class="streak-badge" id="streak-badge">Streak: 0</span>
     </div>
-
-    <div class="topic-row">
-      <button class="topic-btn active" data-topic="both">Both papers</button>
-      <button class="topic-btn" data-topic="J277/01">Paper 1 — Systems</button>
-      <button class="topic-btn" data-topic="J277/02">Paper 2 — Programming</button>
-    </div>
-
+    <div class="topic-row" id="topic-row"></div>
     <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
-
     <div id="quiz-area"></div>
-
   </div>
+
 </div>
 
-<script src="questions.js"></script>
+<script src="cs.js"></script>
+<script src="maths.js"></script>
+<script src="dt.js"></script>
 <script>
 const PASSWORD_HASH = 'aca488b929c1e7b79c7342f90f01c96206f8c0ce832626e863afc03c42c8f03e';
 
@@ -138,9 +153,51 @@ async function hashString(str) {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+const SUBJECTS = {
+  cs: {
+    label: 'Computer Science',
+    subtitle: 'OCR GCSE J277',
+    icon: '💻',
+    questions: CS_Q,
+    filters: [
+      { label: 'All topics', value: null },
+      { label: 'Paper 1 — Systems', value: 'p1' },
+      { label: 'Paper 2 — Programming', value: 'p2' }
+    ]
+  },
+  maths: {
+    label: 'Mathematics',
+    subtitle: 'OCR GCSE J560',
+    icon: '📐',
+    questions: MATHS_Q,
+    filters: [
+      { label: 'All topics', value: null },
+      { label: 'Number', value: 'number' },
+      { label: 'Algebra', value: 'algebra' },
+      { label: 'Geometry', value: 'geometry' },
+      { label: 'Statistics', value: 'statistics' }
+    ]
+  },
+  dt: {
+    label: 'Design & Technology',
+    subtitle: 'OCR GCSE J310',
+    icon: '🔧',
+    questions: DT_Q,
+    filters: [
+      { label: 'All topics', value: null },
+      { label: 'Materials', value: 'materials' },
+      { label: 'Design Process', value: 'design' },
+      { label: 'Manufacturing', value: 'manufacturing' },
+      { label: 'Electronics', value: 'electronics' }
+    ]
+  }
+};
+
 function shuffle(arr) { return [...arr].sort(() => Math.random() - 0.5); }
+
 let state = {
-  topic: 'both',
+  subject: null,
+  topic: null,
   session: [],
   currentIdx: 0,
   score: 0,
@@ -150,12 +207,17 @@ let state = {
   firstWrongChoice: null
 };
 
+function showScreen(id) {
+  ['lock-screen', 'subject-screen', 'quiz-screen'].forEach(s => {
+    document.getElementById(s).style.display = s === id ? 'block' : 'none';
+  });
+}
+
 async function checkPassword() {
   const val = document.getElementById('pw-input').value;
   if (await hashString(val) === PASSWORD_HASH) {
-    document.getElementById('lock-screen').style.display = 'none';
-    document.getElementById('quiz-screen').style.display = 'block';
-    showStart();
+    showScreen('subject-screen');
+    renderSubjectGrid();
   } else {
     const err = document.getElementById('pw-error');
     err.style.display = 'block';
@@ -164,26 +226,53 @@ async function checkPassword() {
   }
 }
 
-document.querySelectorAll('.topic-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.topic-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    state.topic = btn.dataset.topic;
-  });
-});
+function renderSubjectGrid() {
+  document.getElementById('subject-grid').innerHTML = Object.entries(SUBJECTS).map(([key, sub]) => `
+    <button class="subject-card-btn" onclick="selectSubject('${key}')">
+      <span class="subject-icon">${sub.icon}</span>
+      <div>
+        <div class="subject-name">${sub.label}</div>
+        <div class="subject-sub">${sub.subtitle} &nbsp;·&nbsp; ${sub.questions.length} questions</div>
+      </div>
+    </button>`).join('');
+}
+
+function selectSubject(key) {
+  state.subject = key;
+  state.topic = null;
+  const sub = SUBJECTS[key];
+  document.getElementById('app-title').textContent = sub.label;
+  renderTopicFilters();
+  showScreen('quiz-screen');
+  showStart();
+}
+
+function renderTopicFilters() {
+  const sub = SUBJECTS[state.subject];
+  document.getElementById('topic-row').innerHTML = sub.filters.map(f => `
+    <button class="topic-btn ${f.value === state.topic ? 'active' : ''}" onclick="setTopic(${JSON.stringify(f.value)})">${f.label}</button>
+  `).join('');
+}
+
+function setTopic(value) {
+  state.topic = value;
+  renderTopicFilters();
+}
 
 function showStart() {
+  const sub = SUBJECTS[state.subject];
   document.getElementById('quiz-area').innerHTML = `
     <div style="text-align:center;padding:2rem 0">
-      <p style="font-size:15px;color:var(--text-muted);margin-bottom:0.5rem">10 questions per session from a built-in question bank.</p>
+      <p style="font-size:15px;color:var(--text-muted);margin-bottom:0.5rem">10 questions per session from ${sub.questions.length} in the question bank.</p>
       <p style="font-size:13px;color:var(--text-hint);margin-bottom:1.5rem">One retry if you get it wrong — plus a memory hook to help it stick.</p>
       <button class="btn btn-primary" onclick="startQuiz()">Start quiz</button>
+      <button class="btn btn-secondary" onclick="showScreen('subject-screen')">Change subject</button>
     </div>`;
 }
 
 function startQuiz() {
-  const paperKey = state.topic === 'J277/01' ? 'p1' : state.topic === 'J277/02' ? 'p2' : null;
-  let pool = paperKey ? ALL_Q.filter(q => q.paper === paperKey) : ALL_Q;
+  const sub = SUBJECTS[state.subject];
+  let pool = state.topic ? sub.questions.filter(q => q.paper === state.topic) : sub.questions;
   state.session = shuffle(pool).slice(0, 10);
   state.currentIdx = 0;
   state.score = 0;
@@ -333,7 +422,7 @@ function showScore() {
       <div class="stat-box"><div class="stat-num">${pct}%</div><div class="stat-lbl">Score</div></div>
     </div>
     <button class="btn btn-primary" onclick="startQuiz()">Play again — new questions</button>
-    <button class="btn btn-secondary" onclick="startQuiz()">Change topic &amp; restart</button>`;
+    <button class="btn btn-secondary" onclick="showScreen('subject-screen')">Change subject</button>`;
 }
 </script>
 </body>
