@@ -1,0 +1,9 @@
+systemArmed = true
+doorSensorActive = true
+windowSensorActive = true
+
+if systemArmed = true then
+    if doorSensorActive = true OR windowSensorActive = true then
+        print("Alarm")
+    endif
+endif
