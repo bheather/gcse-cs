@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OCR CS Revision Quiz</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --green: #1D9E75; --green-light: #EAF3DE; --green-dark: #27500A; --green-border: #3B6D11;
+    --red-light: #FCEBEB; --red-dark: #501313; --red-border: #A32D2D;
+    --amber-light: #FAEEDA; --amber-dark: #412402; --amber-border: #854F0B;
+    --gray-bg: #F5F5F3; --gray-surface: #FFFFFF; --gray-border: #E0DED8;
+    --text: #1a1a1a; --text-muted: #6b6b6b; --text-hint: #9b9b9b;
+    --radius: 10px; --radius-lg: 14px;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--gray-bg); color: var(--text); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+  .container { width: 100%; max-width: 640px; }
+
+  /* Password screen */
+  #lock-screen { text-align: center; }
+  .lock-card { background: var(--gray-surface); border: 1px solid var(--gray-border); border-radius: var(--radius-lg); padding: 2.5rem 2rem; }
+  .lock-icon { font-size: 40px; margin-bottom: 1rem; }
+  .lock-card h1 { font-size: 20px; font-weight: 600; margin-bottom: 0.25rem; }
+  .lock-card p { font-size: 14px; color: var(--text-muted); margin-bottom: 1.5rem; }
+  .pw-input { width: 100%; padding: 12px 16px; border: 1px solid var(--gray-border); border-radius: var(--radius); font-size: 16px; margin-bottom: 0.75rem; outline: none; }
+  .pw-input:focus { border-color: var(--green); }
+  .pw-error { font-size: 13px; color: var(--red-border); margin-bottom: 0.75rem; display: none; }
+
+  /* Shared button styles */
+  .btn { width: 100%; padding: 12px 16px; border-radius: var(--radius); border: none; font-size: 15px; font-weight: 500; cursor: pointer; transition: opacity 0.15s, transform 0.1s; }
+  .btn:active { transform: scale(0.98); }
+  .btn:disabled { opacity: 0.4; cursor: default; }
+  .btn-primary { background: var(--green); color: #fff; }
+  .btn-primary:hover:not(:disabled) { opacity: 0.9; }
+  .btn-secondary { background: transparent; color: var(--text-muted); border: 1px solid var(--gray-border); margin-top: 8px; }
+  .btn-secondary:hover { background: var(--gray-bg); }
+
+  /* Quiz shell */
+  #quiz-screen { display: none; }
+  .top-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+  .app-title { font-size: 16px; font-weight: 600; }
+  .streak-badge { font-size: 12px; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--gray-border); color: var(--text-muted); background: var(--gray-surface); }
+  .topic-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 1.25rem; }
+  .topic-btn { font-size: 12px; padding: 5px 12px; border-radius: 20px; border: 1px solid var(--gray-border); background: var(--gray-surface); color: var(--text-muted); cursor: pointer; transition: all 0.15s; }
+  .topic-btn.active { background: var(--green); color: #fff; border-color: var(--green); }
+  .progress-bar { height: 6px; background: var(--gray-border); border-radius: 3px; margin-bottom: 1.5rem; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--green); border-radius: 3px; transition: width 0.4s ease; }
+
+  /* Question */
+  .question-card { background: var(--gray-surface); border: 1px solid var(--gray-border); border-radius: var(--radius-lg); padding: 1.25rem; margin-bottom: 1rem; }
+  .q-meta { font-size: 12px; color: var(--text-hint); margin-bottom: 0.5rem; }
+  .q-text { font-size: 16px; line-height: 1.6; }
+  .attempts-row { display: flex; gap: 6px; align-items: center; margin-bottom: 0.5rem; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot.on { background: var(--green); }
+  .dot.off { background: var(--red-border); }
+  .dot.empty { background: var(--gray-border); }
+  .attempts-label { font-size: 12px; color: var(--text-hint); }
+  .options { display: flex; flex-direction: column; gap: 8px; margin-bottom: 1rem; }
+  .option-btn { text-align: left; padding: 12px 16px; border-radius: var(--radius); border: 1px solid var(--gray-border); background: var(--gray-surface); color: var(--text); cursor: pointer; font-size: 15px; line-height: 1.5; transition: all 0.15s; }
+  .option-btn:hover:not(:disabled) { background: var(--gray-bg); border-color: #aaa; }
+  .option-btn:disabled { cursor: default; }
+  .option-btn.correct { background: var(--green-light); border-color: var(--green-border); color: var(--green-dark); }
+  .option-btn.wrong { background: var(--red-light); border-color: var(--red-border); color: var(--red-dark); }
+  .option-btn.wrong-first { background: var(--amber-light); border-color: var(--amber-border); color: var(--amber-dark); }
+  .option-btn.reveal { background: var(--green-light); border-color: var(--green-border); color: var(--green-dark); }
+
+  /* Feedback */
+  .feedback-box { border-radius: var(--radius); padding: 12px 16px; font-size: 14px; line-height: 1.6; margin-bottom: 0.75rem; }
+  .feedback-box.try-again { background: var(--amber-light); color: var(--amber-dark); border: 1px solid var(--amber-border); }
+  .feedback-box.correct { background: var(--green-light); color: var(--green-dark); border: 1px solid var(--green-border); }
+  .feedback-box.wrong { background: var(--red-light); color: var(--red-dark); border: 1px solid var(--red-border); }
+  .hook-box { background: var(--gray-bg); border: 1px solid var(--gray-border); border-radius: var(--radius); padding: 12px 16px; font-size: 13px; color: var(--text-muted); line-height: 1.6; margin-bottom: 1rem; }
+  .hook-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-hint); margin-bottom: 4px; }
+
+  /* Score screen */
+  .score-card { background: var(--gray-surface); border: 1px solid var(--gray-border); border-radius: var(--radius-lg); padding: 2rem; text-align: center; margin-bottom: 1rem; }
+  .score-big { font-size: 52px; font-weight: 600; color: var(--green); line-height: 1; margin: 0.75rem 0; }
+  .score-msg { font-size: 15px; color: var(--text-muted); margin-top: 0.5rem; }
+  .stat-row { display: flex; gap: 10px; margin-bottom: 1rem; }
+  .stat-box { flex: 1; background: var(--gray-surface); border: 1px solid var(--gray-border); border-radius: var(--radius); padding: 0.75rem; text-align: center; }
+  .stat-num { font-size: 22px; font-weight: 600; }
+  .stat-lbl { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+  /* Loading */
+  .loading { text-align: center; padding: 3rem 1rem; color: var(--text-muted); font-size: 15px; }
+  .spinner { width: 32px; height: 32px; border: 3px solid var(--gray-border); border-top-color: var(--green); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 1rem; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* API key prompt */
+  .api-section { background: var(--gray-surface); border: 1px solid var(--gray-border); border-radius: var(--radius-lg); padding: 1.25rem; margin-bottom: 1rem; }
+  .api-section h2 { font-size: 15px; font-weight: 600; margin-bottom: 0.25rem; }
+  .api-section p { font-size: 13px; color: var(--text-muted); margin-bottom: 0.75rem; line-height: 1.5; }
+  .api-input { width: 100%; padding: 10px 14px; border: 1px solid var(--gray-border); border-radius: var(--radius); font-size: 14px; font-family: monospace; margin-bottom: 0.5rem; outline: none; }
+  .api-input:focus { border-color: var(--green); }
+  .api-save-btn { padding: 8px 16px; border-radius: var(--radius); border: none; background: var(--green); color: #fff; font-size: 13px; font-weight: 500; cursor: pointer; }
+
+  @media (max-width: 480px) {
+    .score-big { font-size: 40px; }
+    .lock-card { padding: 2rem 1.25rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Lock screen -->
+  <div id="lock-screen">
+    <div class="lock-card">
+      <div class="lock-icon">📚</div>
+      <h1>OCR CS Revision Quiz</h1>
+      <p>Enter the password to start revising</p>
+      <input class="pw-input" type="password" id="pw-input" placeholder="Password" onkeydown="if(event.key==='Enter')checkPassword()">
+      <div class="pw-error" id="pw-error">Incorrect password — try again</div>
+      <button class="btn btn-primary" onclick="checkPassword()">Unlock</button>
+    </div>
+  </div>
+
+  <!-- Quiz screen -->
+  <div id="quiz-screen">
+
+    <div class="top-bar">
+      <span class="app-title">OCR GCSE CS Quiz</span>
+      <span class="streak-badge" id="streak-badge">Streak: 0</span>
+    </div>
+
+    <div class="topic-row">
+      <button class="topic-btn active" data-topic="both">Both papers</button>
+      <button class="topic-btn" data-topic="J277/01">Paper 1 — Systems</button>
+      <button class="topic-btn" data-topic="J277/02">Paper 2 — Programming</button>
+    </div>
+
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+
+    <!-- API key entry -->
+    <div class="api-section" id="api-section">
+      <h2>One-time setup</h2>
+      <p>Paste your Anthropic API key below. It is saved only in this browser and never sent anywhere except Anthropic's servers to generate questions.</p>
+      <input class="api-input" type="password" id="api-key-input" placeholder="sk-ant-...">
+      <br>
+      <button class="api-save-btn" onclick="saveApiKey()">Save key &amp; start</button>
+    </div>
+
+    <div id="quiz-area"></div>
+
+  </div>
+</div>
+
+<script>
+const PASSWORD = 'connorironclad';
+const TOPICS = {
+  'both': 'Both papers — J277/01 Computer Systems (Systems architecture, Memory, Networks, Security, Systems software, Ethical impacts) AND J277/02 Computational Thinking (Algorithms, Programming fundamentals, Robust programs, Boolean logic, Languages/IDEs)',
+  'J277/01': 'J277/01 Computer Systems only (Systems architecture, Memory and Storage, Networks, Network Security, Systems software, Ethical/legal/cultural/environmental impacts)',
+  'J277/02': 'J277/02 Computational Thinking only (Algorithms, Programming fundamentals, Producing robust programs, Boolean logic, Programming languages and IDEs)'
+};
+
+let apiKey = '';
+let state = {
+  topic: 'both',
+  session: [],
+  currentIdx: 0,
+  score: 0,
+  streak: 0,
+  firstTryCorrect: 0,
+  phase: 'unanswered',
+  firstWrongChoice: null
+};
+
+function checkPassword() {
+  const val = document.getElementById('pw-input').value;
+  if (val === PASSWORD) {
+    document.getElementById('lock-screen').style.display = 'none';
+    document.getElementById('quiz-screen').style.display = 'block';
+    const saved = localStorage.getItem('ocr_quiz_apikey');
+    if (saved) {
+      apiKey = saved;
+      document.getElementById('api-section').style.display = 'none';
+      showStart();
+    }
+  } else {
+    const err = document.getElementById('pw-error');
+    err.style.display = 'block';
+    document.getElementById('pw-input').value = '';
+    document.getElementById('pw-input').focus();
+  }
+}
+
+function saveApiKey() {
+  const val = document.getElementById('api-key-input').value.trim();
+  if (!val.startsWith('sk-')) { alert('Please enter a valid Anthropic API key starting with sk-'); return; }
+  apiKey = val;
+  localStorage.setItem('ocr_quiz_apikey', apiKey);
+  document.getElementById('api-section').style.display = 'none';
+  showStart();
+}
+
+document.querySelectorAll('.topic-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.topic-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.topic = btn.dataset.topic;
+  });
+});
+
+function showStart() {
+  document.getElementById('quiz-area').innerHTML = `
+    <div style="text-align:center;padding:2rem 0">
+      <p style="font-size:15px;color:var(--text-muted);margin-bottom:0.5rem">10 fresh AI-generated questions per session.</p>
+      <p style="font-size:13px;color:var(--text-hint);margin-bottom:1.5rem">You get one retry if you get it wrong — plus a memory hook to help it stick.</p>
+      <button class="btn btn-primary" onclick="startQuiz()">Start quiz</button>
+    </div>`;
+}
+
+async function callClaude(prompt) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1200,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  });
+  if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || 'API error'); }
+  const data = await res.json();
+  return data.content[0].text;
+}
+
+async function generateBatch() {
+  const topicDesc = TOPICS[state.topic];
+  const prompt = `You are generating quiz questions for a GCSE OCR Computer Science student (J277) targeting grade 4-6. Generate exactly 10 multiple choice questions for: ${topicDesc}.
+
+Rules:
+- Questions appropriate for grade 4-6 (not too easy, not grade 8-9 hard)
+- Mix of topics across the selected paper(s)
+- 4 options each (A, B, C, D)
+- Include a short explanation (2 sentences) for the correct answer
+- Include a "memory_hook": a short analogy, memorable phrase, or vivid comparison (1-2 sentences) that helps the concept stick — make it fun or relatable for a teenager
+- Vary question types: recall, "which of these", apply-knowledge
+- For Paper 2: include Python syntax AND OCR ERL pseudocode questions (e.g. "for i = 0 to N", "while", "if...then...else...endif", "print()", "input()")
+- Keep language clear and accessible
+
+Respond ONLY with a valid JSON array, no markdown fences, no preamble, no trailing text:
+[{"q":"...","options":["A. ...","B. ...","C. ...","D. ..."],"answer":"A","explanation":"...","memory_hook":"...","topic":"..."}]`;
+
+  const raw = await callClaude(prompt);
+  const clean = raw.replace(/```json|```/g, '').trim();
+  return JSON.parse(clean);
+}
+
+async function startQuiz() {
+  state.session = [];
+  state.currentIdx = 0;
+  state.score = 0;
+  state.streak = 0;
+  state.firstTryCorrect = 0;
+  state.phase = 'unanswered';
+  state.firstWrongChoice = null;
+  updateStreak();
+  document.getElementById('quiz-area').innerHTML = `<div class="loading"><div class="spinner"></div>Generating 10 fresh questions…<br><span style="font-size:13px">About 10 seconds</span></div>`;
+  document.getElementById('progress-fill').style.width = '0%';
+  try {
+    state.session = await generateBatch();
+    showQuestion();
+  } catch(e) {
+    document.getElementById('quiz-area').innerHTML = `<p style="color:var(--red-border);padding:1rem;font-size:14px">Error: ${e.message}</p><button class="btn btn-primary" onclick="startQuiz()">Retry</button>`;
+  }
+}
+
+function updateStreak() {
+  document.getElementById('streak-badge').textContent = 'Streak: ' + state.streak;
+}
+
+function updateProgress() {
+  document.getElementById('progress-fill').style.width = (state.currentIdx / state.session.length * 100) + '%';
+}
+
+function showQuestion() {
+  const q = state.session[state.currentIdx];
+  state.phase = 'unanswered';
+  state.firstWrongChoice = null;
+  updateProgress();
+
+  const opts = q.options.map((opt, i) => {
+    const l = String.fromCharCode(65 + i);
+    return `<button class="option-btn" id="opt-${l}" onclick="selectAnswer('${l}')">${opt}</button>`;
+  }).join('');
+
+  document.getElementById('quiz-area').innerHTML = `
+    <div class="question-card">
+      <div class="q-meta">Question ${state.currentIdx + 1} of ${state.session.length} &nbsp;·&nbsp; ${q.topic}</div>
+      <div class="q-text">${q.q}</div>
+    </div>
+    <div class="attempts-row" id="attempts-row">
+      <span class="dot on"></span><span class="dot on"></span>
+      <span class="attempts-label">2 attempts available</span>
+    </div>
+    <div class="options">${opts}</div>
+    <div id="feedback-area"></div>
+    <button class="btn btn-primary" id="next-btn" onclick="nextQuestion()" style="display:none">Next question →</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+      <span style="font-size:13px;color:var(--text-muted)">Score: ${state.score}/${state.currentIdx}</span>
+      <button class="btn btn-secondary" style="width:auto;padding:6px 14px;font-size:13px;margin-top:0" onclick="startQuiz()">Restart</button>
+    </div>`;
+}
+
+function selectAnswer(chosen) {
+  const q = state.session[state.currentIdx];
+  const correct = q.answer;
+  const isRight = chosen === correct;
+
+  if (state.phase === 'unanswered') {
+    if (isRight) {
+      state.phase = 'correct';
+      state.score++; state.streak++; state.firstTryCorrect++;
+      updateStreak();
+      mark(chosen, 'correct'); disableAll();
+      showFeedback('correct', q); showNext();
+    } else {
+      state.phase = 'retry';
+      state.firstWrongChoice = chosen;
+      mark(chosen, 'wrong-first');
+      document.getElementById('opt-' + chosen).disabled = true;
+      setAttempts(1);
+      showFeedback('try-again', q);
+    }
+  } else if (state.phase === 'retry') {
+    if (isRight) {
+      state.phase = 'correct-retry';
+      state.score++; state.streak++;
+      updateStreak();
+      mark(chosen, 'correct'); disableAll();
+      showFeedback('correct-retry', q);
+    } else {
+      state.phase = 'failed';
+      state.streak = 0; updateStreak();
+      mark(chosen, 'wrong'); mark(correct, 'reveal'); disableAll();
+      showFeedback('wrong', q);
+    }
+    setAttempts(2); showNext();
+  }
+}
+
+function setAttempts(used) {
+  const row = document.getElementById('attempts-row');
+  if (!row) return;
+  if (used === 1) {
+    row.innerHTML = '<span class="dot off"></span><span class="dot on"></span><span class="attempts-label">1 attempt left — choose carefully!</span>';
+  } else {
+    row.innerHTML = '<span class="dot off"></span><span class="dot off"></span><span class="attempts-label">No attempts left</span>';
+  }
+}
+
+function mark(letter, cls) {
+  const btn = document.getElementById('opt-' + letter);
+  if (btn) btn.classList.add(cls);
+}
+
+function disableAll() {
+  document.querySelectorAll('.option-btn').forEach(b => b.disabled = true);
+}
+
+function showFeedback(type, q) {
+  const fb = document.getElementById('feedback-area');
+  const hookHtml = `<div class="hook-box"><div class="hook-label">Memory hook</div>${q.memory_hook}</div>`;
+  const msgs = {
+    'try-again': `<div class="feedback-box try-again"><strong>Not quite — try again!</strong> One more attempt. Think it through before picking.</div>`,
+    'correct': `<div class="feedback-box correct"><strong>Correct first time!</strong> ${q.explanation}</div>${hookHtml}`,
+    'correct-retry': `<div class="feedback-box correct"><strong>Correct on second attempt!</strong> ${q.explanation}</div>${hookHtml}`,
+    'wrong': `<div class="feedback-box wrong"><strong>The correct answer is ${q.answer}.</strong> ${q.explanation}</div>${hookHtml}`
+  };
+  fb.innerHTML = msgs[type] || '';
+}
+
+function showNext() {
+  const btn = document.getElementById('next-btn');
+  if (btn) btn.style.display = 'block';
+}
+
+function nextQuestion() {
+  state.currentIdx++;
+  if (state.currentIdx >= state.session.length) showScore();
+  else showQuestion();
+}
+
+function showScore() {
+  document.getElementById('progress-fill').style.width = '100%';
+  const total = state.session.length;
+  const pct = Math.round(state.score / total * 100);
+  const msgs = ['Every quiz builds your knowledge. Have another go!', 'Getting there — review the memory hooks and try again.', 'Solid effort — good pass range. Keep going!', 'Excellent — you really know this material!'];
+  const msg = pct >= 80 ? msgs[3] : pct >= 60 ? msgs[2] : pct >= 40 ? msgs[1] : msgs[0];
+
+  document.getElementById('quiz-area').innerHTML = `
+    <div class="score-card">
+      <div style="font-size:13px;color:var(--text-hint)">Session complete</div>
+      <div class="score-big">${state.score}/${total}</div>
+      <div style="font-size:14px;font-weight:500">${pct}%</div>
+      <div class="score-msg">${msg}</div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-box"><div class="stat-num" style="color:var(--green)">${state.firstTryCorrect}</div><div class="stat-lbl">First try</div></div>
+      <div class="stat-box"><div class="stat-num" style="color:#BA7517">${state.score - state.firstTryCorrect}</div><div class="stat-lbl">Second try</div></div>
+      <div class="stat-box"><div class="stat-num" style="color:var(--red-border)">${total - state.score}</div><div class="stat-lbl">Missed</div></div>
+      <div class="stat-box"><div class="stat-num">${pct}%</div><div class="stat-lbl">Score</div></div>
+    </div>
+    <button class="btn btn-primary" onclick="startQuiz()">Play again — new questions</button>
+    <button class="btn btn-secondary" onclick="startQuiz()">Change topic &amp; restart</button>`;
+}
+</script>
+</body>
+</html>
