@@ -18,7 +18,7 @@
   .container { width: 100%; max-width: 640px; }
 
   /* Password screen */
-  #lock-screen { text-align: center; }
+  #lock-screen { display: none; text-align: center; }
   .lock-card { background: var(--gray-surface); border: 1px solid var(--gray-border); border-radius: var(--radius-lg); padding: 2.5rem 2rem; }
   .lock-icon { font-size: 40px; margin-bottom: 1rem; }
   .lock-card h1 { font-size: 20px; font-weight: 600; margin-bottom: 0.25rem; }
@@ -37,7 +37,7 @@
   .btn-secondary:hover { background: var(--gray-bg); }
 
   /* Subject screen */
-  #subject-screen { display: none; }
+  #subject-screen { display: block; }
   .subject-header { text-align: center; margin-bottom: 1.5rem; }
   .subject-header h1 { font-size: 20px; font-weight: 600; margin-bottom: 0.25rem; }
   .subject-header p { font-size: 14px; color: var(--text-muted); }
@@ -424,6 +424,8 @@ function showScore() {
     <button class="btn btn-primary" onclick="startQuiz()">Play again — new questions</button>
     <button class="btn btn-secondary" onclick="showScreen('subject-screen')">Change subject</button>`;
 }
+
+renderSubjectGrid();
 </script>
 </body>
 </html>
