@@ -195,6 +195,38 @@ const SUBJECTS = {
 
 function shuffle(arr) { return [...arr].sort(() => Math.random() - 0.5); }
 
+const ANALYTICS_URL = 'https://events-54431611248.europe-west2.run.app';
+const ANALYTICS_AUTH = '__ANALYTICS_AUTH__';
+
+function getInstallGuid() {
+  let guid = localStorage.getItem('install_guid');
+  if (!guid) { guid = crypto.randomUUID(); localStorage.setItem('install_guid', guid); }
+  return guid;
+}
+
+function postAnalyticsAnswer(q, response) {
+  const activeTime = Math.round((Date.now() - state.questionStartTime) / 1000);
+  const payload = {
+    session_guid: state.sessionGuid,
+    event_index: ++state.eventIndex,
+    event_name: 'answer',
+    created_at: new Date().toISOString(),
+    active_time: activeTime,
+    event_data: JSON.stringify({ paper: q.paper, topic: q.topic, question: q.q, answer: q.answer, response }),
+    game_id: 'quiz',
+    user_id: '1',
+    account_id: '1',
+    subscribed: false,
+    app_version: '1.0.0',
+    install_guid: getInstallGuid()
+  };
+  fetch(ANALYTICS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': ANALYTICS_AUTH },
+    body: JSON.stringify(payload)
+  }).catch(() => {});
+}
+
 let state = {
   subject: null,
   topic: null,
@@ -204,7 +236,10 @@ let state = {
   streak: 0,
   firstTryCorrect: 0,
   phase: 'unanswered',
-  firstWrongChoice: null
+  firstWrongChoice: null,
+  sessionGuid: null,
+  eventIndex: 0,
+  questionStartTime: null
 };
 
 function showScreen(id) {
@@ -280,6 +315,8 @@ function startQuiz() {
   state.firstTryCorrect = 0;
   state.phase = 'unanswered';
   state.firstWrongChoice = null;
+  state.sessionGuid = crypto.randomUUID();
+  state.eventIndex = 0;
   updateStreak();
   document.getElementById('progress-fill').style.width = '0%';
   showQuestion();
@@ -297,6 +334,7 @@ function showQuestion() {
   const q = state.session[state.currentIdx];
   state.phase = 'unanswered';
   state.firstWrongChoice = null;
+  state.questionStartTime = Date.now();
   updateProgress();
 
   const opts = q.options.map((opt, i) => {
@@ -333,12 +371,14 @@ function selectAnswer(chosen) {
       state.score++; state.streak++; state.firstTryCorrect++;
       updateStreak();
       mark(chosen, 'correct'); disableAll();
+      postAnalyticsAnswer(q, chosen);
       showFeedback('correct', q); showNext();
     } else {
       state.phase = 'retry';
       state.firstWrongChoice = chosen;
       mark(chosen, 'wrong-first');
       document.getElementById('opt-' + chosen).disabled = true;
+      postAnalyticsAnswer(q, chosen);
       setAttempts(1);
       showFeedback('try-again', q);
     }
@@ -348,11 +388,13 @@ function selectAnswer(chosen) {
       state.score++; state.streak++;
       updateStreak();
       mark(chosen, 'correct'); disableAll();
+      postAnalyticsAnswer(q, chosen);
       showFeedback('correct-retry', q);
     } else {
       state.phase = 'failed';
       state.streak = 0; updateStreak();
       mark(chosen, 'wrong'); mark(correct, 'reveal'); disableAll();
+      postAnalyticsAnswer(q, chosen);
       showFeedback('wrong', q);
     }
     setAttempts(2); showNext();
