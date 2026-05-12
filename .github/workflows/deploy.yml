@@ -23,6 +23,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Inject secrets
         run: sed -i "s|__ANALYTICS_AUTH__|${{ secrets.ANALYTICS_AUTH }}|g" index.html
 
