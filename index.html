@@ -95,6 +95,17 @@
   .stat-num { font-size: 22px; font-weight: 600; }
   .stat-lbl { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 
+  /* Paper selection screen */
+  #paper-screen { display: none; }
+  .paper-grid { display: flex; flex-direction: column; gap: 10px; margin-top: 1rem; }
+  .paper-btn { display: flex; align-items: center; gap: 1rem; width: 100%; padding: 1.1rem 1.25rem; background: var(--gray-surface); border: 1px solid var(--gray-border); border-radius: var(--radius-lg); cursor: pointer; text-align: left; transition: all 0.15s; }
+  .paper-btn:hover { border-color: var(--green); background: var(--green-light); }
+  .paper-btn-icon { font-size: 28px; line-height: 1; }
+  .paper-btn-label { font-size: 16px; font-weight: 600; color: var(--text); }
+  .paper-btn-sub { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+  .paper-back { margin-top: 0.75rem; background: none; border: none; color: var(--text-muted); font-size: 14px; cursor: pointer; padding: 6px 0; }
+  .paper-back:hover { color: var(--text); }
+
   /* Loading */
   .loading { text-align: center; padding: 3rem 1rem; color: var(--text-muted); font-size: 15px; }
 
@@ -129,6 +140,16 @@
     <div class="subject-grid" id="subject-grid"></div>
   </div>
 
+  <!-- Paper selection screen -->
+  <div id="paper-screen">
+    <div class="subject-header">
+      <h1 id="paper-screen-title"></h1>
+      <p id="paper-screen-sub"></p>
+    </div>
+    <div class="paper-grid" id="paper-grid"></div>
+    <button class="paper-back" onclick="showScreen('subject-screen')">← Back to subjects</button>
+  </div>
+
   <!-- Quiz screen -->
   <div id="quiz-screen">
     <div class="top-bar">
@@ -159,6 +180,11 @@ const SUBJECTS = {
     subtitle: 'OCR GCSE J277',
     icon: '💻',
     questions: CS_Q,
+    papers: [
+      { label: 'Paper 1', subtitle: 'Systems & Architecture', icon: '🖥️', value: 'p1' },
+      { label: 'Paper 2', subtitle: 'Algorithms & Programming', icon: '💾', value: 'p2' },
+      { label: 'Mix', subtitle: 'Questions from both papers', icon: '🔀', value: null }
+    ],
     filters: [
       { label: 'All topics', value: null },
       { label: 'Paper 1 — Systems', value: 'p1' },
@@ -243,7 +269,7 @@ let state = {
 };
 
 function showScreen(id) {
-  ['lock-screen', 'subject-screen', 'quiz-screen'].forEach(s => {
+  ['lock-screen', 'subject-screen', 'paper-screen', 'quiz-screen'].forEach(s => {
     document.getElementById(s).style.display = s === id ? 'block' : 'none';
   });
 }
@@ -277,6 +303,32 @@ function selectSubject(key) {
   state.topic = null;
   const sub = SUBJECTS[key];
   document.getElementById('app-title').textContent = sub.label;
+  if (sub.papers) {
+    showPaperScreen();
+  } else {
+    renderTopicFilters();
+    showScreen('quiz-screen');
+    showStart();
+  }
+}
+
+function showPaperScreen() {
+  const sub = SUBJECTS[state.subject];
+  document.getElementById('paper-screen-title').textContent = sub.label;
+  document.getElementById('paper-screen-sub').textContent = 'Choose which paper to revise';
+  document.getElementById('paper-grid').innerHTML = sub.papers.map(p => `
+    <button class="paper-btn" onclick='selectPaper(${JSON.stringify(p.value)})'>
+      <span class="paper-btn-icon">${p.icon}</span>
+      <div>
+        <div class="paper-btn-label">${p.label}</div>
+        <div class="paper-btn-sub">${p.subtitle}</div>
+      </div>
+    </button>`).join('');
+  showScreen('paper-screen');
+}
+
+function selectPaper(value) {
+  state.topic = value;
   renderTopicFilters();
   showScreen('quiz-screen');
   showStart();
@@ -284,8 +336,12 @@ function selectSubject(key) {
 
 function renderTopicFilters() {
   const sub = SUBJECTS[state.subject];
+  if (sub.papers) {
+    document.getElementById('topic-row').innerHTML = '';
+    return;
+  }
   document.getElementById('topic-row').innerHTML = sub.filters.map(f => `
-    <button class="topic-btn ${f.value === state.topic ? 'active' : ''}" onclick="setTopic(${JSON.stringify(f.value)})">${f.label}</button>
+    <button class="topic-btn ${f.value === state.topic ? 'active' : ''}" onclick='setTopic(${JSON.stringify(f.value)})'>${f.label}</button>
   `).join('');
 }
 
