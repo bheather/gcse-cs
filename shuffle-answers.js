@@ -3,15 +3,11 @@ const vm   = require('vm');
 const fs   = require('fs');
 const path = require('path');
 
-const filePath = path.join(__dirname, 'cs.js');
-const content  = fs.readFileSync(filePath, 'utf8');
-
-// Parse cs.js to obtain the question array
-// (const declarations don't attach to the vm context; appending an implicit
-//  global assignment is the standard workaround)
-const ctx = {};
-vm.runInNewContext(content + '\n__CS_Q = CS_Q;', ctx);
-const questions = ctx.__CS_Q;
+const FILES = [
+  { file: 'cs.js',    varName: 'CS_Q',    format: 'multiline'  },
+  { file: 'dt.js',    varName: 'DT_Q',    format: 'singleline' },
+  { file: 'maths.js', varName: 'MATHS_Q', format: 'singleline' },
+];
 
 // Fisher-Yates shuffle
 function shuffle(arr) {
@@ -23,29 +19,41 @@ function shuffle(arr) {
   return a;
 }
 
-// Shuffle each question's options and update the answer letter to match
-const processed = questions.map(q => {
-  const answerIdx  = q.answer.charCodeAt(0) - 65; // A→0, B→1 …
+// Shuffle options and update the answer letter to match
+function processQuestion(q) {
+  const answerIdx   = q.answer.charCodeAt(0) - 65;
   const correctText = q.options[answerIdx].replace(/^[A-D]\. /, '');
-
-  const stripped  = q.options.map(o => o.replace(/^[A-D]\. /, ''));
-  const shuffled  = shuffle(stripped);
-  const newOptions = shuffled.map((text, i) => String.fromCharCode(65 + i) + '. ' + text);
-  const newAnswer  = String.fromCharCode(65 + shuffled.indexOf(correctText));
-
+  const stripped    = q.options.map(o => o.replace(/^[A-D]\. /, ''));
+  const shuffled    = shuffle(stripped);
+  const newOptions  = shuffled.map((text, i) => String.fromCharCode(65 + i) + '. ' + text);
+  const newAnswer   = String.fromCharCode(65 + shuffled.indexOf(correctText));
   return { ...q, options: newOptions, answer: newAnswer };
-});
-
-// Escape single quotes and backslashes for single-quoted JS string literals
-function esc(s) {
-  return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
-// Serialise one question in the same multi-line format as the source file
-// Options 2-4 are indented to align with the opening quote of option 1:
-//   options:['A. …',     ← 3 spaces + "options:['" = 12 chars before quote
-//            'B. …',     ← 12 spaces
-function serializeQuestion(q, trailingComma) {
+// Replace literal newlines inside single-quoted string literals so vm can parse the file.
+// Scans character-by-character to avoid touching newlines outside strings.
+function fixLiteralNewlines(src) {
+  let out = '', inStr = false, escaped = false;
+  for (const ch of src) {
+    if (escaped)               { out += ch; escaped = false; continue; }
+    if (ch === '\\' && inStr)  { out += ch; escaped = true;  continue; }
+    if (ch === "'" && inStr)   { out += ch; inStr = false;   continue; }
+    if (ch === "'" && !inStr)  { out += ch; inStr = true;    continue; }
+    if (ch === '\n' && inStr)  { out += '\\n';               continue; }
+    out += ch;
+  }
+  return out;
+}
+
+// Escape characters that need backslash-escaping in single-quoted JS string literals
+function esc(s) {
+  return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+}
+
+// Multi-line serialiser (used by cs.js)
+// options:['A. …',     ← 3 spaces + "options:['" = 12 chars before quote
+//          'B. …',     ← 12 spaces
+function serializeMultiline(q, trailingComma) {
   const pad = ' '.repeat(12);
   return [
     `  {paper:'${esc(q.paper)}',topic:'${esc(q.topic)}',q:'${esc(q.q)}',`,
@@ -59,23 +67,40 @@ function serializeQuestion(q, trailingComma) {
   ].join('\n');
 }
 
-// Rebuild the file, re-inserting section comments when the topic changes
-const lines = ['const CS_Q = ['];
-let lastKey = null;
+// Single-line serialiser (used by dt.js and maths.js)
+function serializeSingleline(q, trailingComma) {
+  const opts = q.options.map(o => `'${esc(o)}'`).join(',');
+  return `  {paper:'${esc(q.paper)}',topic:'${esc(q.topic)}',q:'${esc(q.q)}',options:[${opts}],answer:'${q.answer}',explanation:'${esc(q.explanation)}',memory_hook:'${esc(q.memory_hook)}'}${trailingComma ? ',' : ''}`;
+}
 
-processed.forEach((q, i) => {
-  const key = `${q.paper}:${q.topic}`;
-  lines.push(''); // blank line before every question
-  if (key !== lastKey) {
-    const paperNum = q.paper === 'p1' ? '1' : '2';
-    lines.push(`  // ─── PAPER ${paperNum}: ${q.topic} ───`);
-    lastKey = key;
-  }
-  lines.push(serializeQuestion(q, i < processed.length - 1));
+FILES.forEach(({ file, varName, format }) => {
+  const filePath = path.join(__dirname, file);
+  const content  = fs.readFileSync(filePath, 'utf8');
+
+  const ctx = {};
+  vm.runInNewContext(fixLiteralNewlines(content) + `\n__Q = ${varName};`, ctx);
+  const processed = ctx.__Q.map(processQuestion);
+
+  const serialize = format === 'multiline' ? serializeMultiline : serializeSingleline;
+  const lines = [`const ${varName} = [`];
+  let lastKey = null;
+
+  processed.forEach((q, i) => {
+    const key = `${q.paper}:${q.topic}`;
+    if (key !== lastKey) {
+      const label = format === 'multiline'
+        ? `PAPER ${q.paper === 'p1' ? '1' : '2'}: ${q.topic}`
+        : q.topic;
+      lines.push(`  // ─── ${label} ───`);
+      lastKey = key;
+    }
+    lines.push(serialize(q, i < processed.length - 1));
+    if (format === 'multiline') lines.push('');
+  });
+
+  lines.push('];');
+  lines.push('');
+
+  fs.writeFileSync(filePath, lines.join('\n'), 'utf8');
+  console.log(`${file}: shuffled ${processed.length} questions.`);
 });
-
-lines.push('];');
-lines.push('');
-
-fs.writeFileSync(filePath, lines.join('\n'), 'utf8');
-console.log(`Shuffled answers for ${processed.length} questions.`);
