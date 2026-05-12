@@ -154,7 +154,10 @@
   <div id="quiz-screen">
     <div class="top-bar">
       <span class="app-title" id="app-title">GCSE Quiz</span>
-      <span class="streak-badge" id="streak-badge">Streak: 0</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="streak-badge" id="streak-badge">Streak: 0</span>
+        <button class="paper-back" style="margin-top:0" onclick="showScreen('subject-screen')">✕ Exit</button>
+      </div>
     </div>
     <div class="topic-row" id="topic-row"></div>
     <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
